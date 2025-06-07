@@ -14,7 +14,7 @@ This project is an experiment to bring Svelte 5's reactivity and ergonomics to a
 To get started, clone the repository and install dependencies:
 
 ```bash
-npm install runes
+npm install react-runes
 ```
 
 ---
@@ -45,7 +45,7 @@ npm install runes
 #### Example
 
 ```tsx
-import { state, derived, effect, $ } from 'runes';
+import { state, derived, effect, $ } from 'react-runes';
 
 const count = state(0);
 const doubleCount = derived(() => count.value * 2);
