@@ -13,9 +13,9 @@ This project is an experiment to bring Svelte 5's reactivity and ergonomics to a
 
 To get started, clone the repository and install dependencies:
 
-````bash
-npm install @react-runes
-
+```bash
+npm install runes
+```
 
 ---
 
@@ -45,18 +45,18 @@ npm install @react-runes
 #### Example
 
 ```tsx
-import { state, derived, effect, $ } from '@/lib/runes'
+import { state, derived, effect, $ } from 'runes';
 
-const count = state(0)
-const doubleCount = derived(() => count.value * 2)
+const count = state(0);
+const doubleCount = derived(() => count.value * 2);
 
 effect(() => {
-  console.log('Count changed:', count.value)
-})
+  console.log('Count changed:', count.value);
+});
 
 export default function Counter() {
-  const countValue = $(count)
-  const doubleValue = $(doubleCount)
+  const countValue = $(count);
+  const doubleValue = $(doubleCount);
 
   return (
     <div>
@@ -64,9 +64,9 @@ export default function Counter() {
       <p>Double: {doubleValue}</p>
       <button onClick={() => (count.value += 1)}>Increment</button>
     </div>
-  )
+  );
 }
-````
+```
 
 ---
 
@@ -74,15 +74,14 @@ export default function Counter() {
 
 Each feature/component lives in its own directory, colocated with its store and logic:
 
-```
+```yaml
 components/
-  counter-example/
-    counter-example.tsx
-    counter.ts
-  todo-example/
-    todo-example.tsx
-    todos.ts
-  ...
+counter-example/
+counter-example.tsx
+counter.ts
+todo-example/
+todo-example.tsx
+todos.ts
 ```
 
 - **Import from local store:**
