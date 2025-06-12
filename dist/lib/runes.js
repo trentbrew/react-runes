@@ -7,6 +7,8 @@ exports.derived = derived;
 exports.effect = effect;
 exports.useRune = useRune;
 exports.untrack = untrack;
+exports.$state = $state;
+exports.$derived = $derived;
 const zustand_1 = require("zustand");
 const middleware_1 = require("zustand/middleware");
 const react_1 = require("react");
@@ -245,4 +247,191 @@ function untrack(fn) {
  * @returns The current value of the rune, reactively updating the component
  */
 exports.$ = useRune;
-exports.default = { state, derived, effect, useRune, $: exports.$ };
+// $state rune implementation
+function $state(initial, equals = Object.is) {
+    const id = generateId();
+    const store = useGlobalStore.getState();
+    // Initialize state
+    store.states.set(id, initial);
+    // Store equality function
+    if (!('stateEquals' in store))
+        store.stateEquals = new Map();
+    store.stateEquals.set(id, equals);
+    const rune = {
+        id,
+        get value() {
+            if (currentDeps) {
+                currentDeps.add(id);
+            }
+            return store.states.get(id);
+        },
+        set value(newValue) {
+            const oldValue = store.states.get(id);
+            const eq = store.stateEquals.get(id) ||
+                Object.is;
+            if (eq(oldValue, newValue))
+                return;
+            store.states.set(id, newValue);
+            pendingUpdates.add(id);
+            scheduleBatch(store);
+        },
+    };
+    // Proxy for automatic unwrapping
+    return new Proxy(rune, {
+        get(target, prop, receiver) {
+            if (prop === 'id' || prop === 'value' || prop in target) {
+                return Reflect.get(target, prop, receiver);
+            }
+            const value = target.value;
+            if (value && typeof value === 'object') {
+                return value[prop];
+            }
+            // For primitives, allow valueOf/toString
+            if (prop === Symbol.toPrimitive) {
+                return (hint) => {
+                    if (hint === 'number')
+                        return Number(value);
+                    if (hint === 'string')
+                        return String(value);
+                    return value;
+                };
+            }
+            return undefined;
+        },
+        set(target, prop, value, receiver) {
+            if (prop === 'value') {
+                target.value = value;
+                return true;
+            }
+            const current = target.value;
+            if (current && typeof current === 'object') {
+                current[prop] = value;
+                // Trigger update
+                target.value = current;
+                return true;
+            }
+            return false;
+        },
+        has(target, prop) {
+            if (prop === 'id' || prop === 'value' || prop in target)
+                return true;
+            const value = target.value;
+            return value && typeof value === 'object' ? prop in value : false;
+        },
+        ownKeys(target) {
+            const value = target.value;
+            return value && typeof value === 'object' ? Reflect.ownKeys(value) : [];
+        },
+        getOwnPropertyDescriptor(target, prop) {
+            if (prop === 'id' || prop === 'value' || prop in target) {
+                return Object.getOwnPropertyDescriptor(target, prop);
+            }
+            const value = target.value;
+            if (prop === Symbol.toPrimitive) {
+                return {
+                    configurable: true,
+                    enumerable: false,
+                    value: (hint) => {
+                        if (hint === 'number')
+                            return Number(value);
+                        if (hint === 'string')
+                            return String(value);
+                        return value;
+                    },
+                };
+            }
+            return value && typeof value === 'object'
+                ? Object.getOwnPropertyDescriptor(value, prop)
+                : undefined;
+        },
+        getPrototypeOf(target) {
+            const value = target.value;
+            return value && typeof value === 'object'
+                ? Object.getPrototypeOf(value)
+                : Object.prototype;
+        },
+    });
+}
+// $derived rune implementation
+function $derived(fn) {
+    const id = generateId();
+    const store = useGlobalStore.getState();
+    const deps = new Set();
+    // Execute function to capture dependencies
+    currentDeps = deps;
+    const initialValue = fn();
+    currentDeps = null;
+    // Store the derived
+    store.deriveds.set(id, { fn, value: initialValue, deps });
+    const rune = {
+        id,
+        get value() {
+            if (currentDeps) {
+                currentDeps.add(id);
+            }
+            const derived = store.deriveds.get(id);
+            return derived ? derived.value : initialValue;
+        },
+    };
+    // Proxy for automatic unwrapping
+    return new Proxy(rune, {
+        get(target, prop, receiver) {
+            if (prop === 'id' || prop === 'value' || prop in target) {
+                return Reflect.get(target, prop, receiver);
+            }
+            const value = target.value;
+            if (value && typeof value === 'object') {
+                return value[prop];
+            }
+            if (prop === Symbol.toPrimitive) {
+                return (hint) => {
+                    if (hint === 'number')
+                        return Number(value);
+                    if (hint === 'string')
+                        return String(value);
+                    return value;
+                };
+            }
+            return undefined;
+        },
+        has(target, prop) {
+            if (prop === 'id' || prop === 'value' || prop in target)
+                return true;
+            const value = target.value;
+            return value && typeof value === 'object' ? prop in value : false;
+        },
+        ownKeys(target) {
+            const value = target.value;
+            return value && typeof value === 'object' ? Reflect.ownKeys(value) : [];
+        },
+        getOwnPropertyDescriptor(target, prop) {
+            if (prop === 'id' || prop === 'value' || prop in target) {
+                return Object.getOwnPropertyDescriptor(target, prop);
+            }
+            const value = target.value;
+            if (prop === Symbol.toPrimitive) {
+                return {
+                    configurable: true,
+                    enumerable: false,
+                    value: (hint) => {
+                        if (hint === 'number')
+                            return Number(value);
+                        if (hint === 'string')
+                            return String(value);
+                        return value;
+                    },
+                };
+            }
+            return value && typeof value === 'object'
+                ? Object.getOwnPropertyDescriptor(value, prop)
+                : undefined;
+        },
+        getPrototypeOf(target) {
+            const value = target.value;
+            return value && typeof value === 'object'
+                ? Object.getPrototypeOf(value)
+                : Object.prototype;
+        },
+    });
+}
+exports.default = { $state, $derived, $effect: effect, useRune, $: exports.$ };

@@ -279,4 +279,192 @@ export function untrack<T>(fn: () => T): T {
  */
 export const $ = useRune;
 
-export default { state, derived, effect, useRune, $ };
+// $state rune implementation
+export function $state<T>(
+  initial: T,
+  equals: (a: T, b: T) => boolean = Object.is,
+): StateRune<T> {
+  const id = generateId();
+  const store = useGlobalStore.getState();
+
+  // Initialize state
+  store.states.set(id, initial);
+  // Store equality function
+  if (!('stateEquals' in store)) (store as any).stateEquals = new Map();
+  (store as any).stateEquals.set(id, equals);
+
+  const rune: StateRune<T> = {
+    id,
+    get value(): T {
+      if (currentDeps) {
+        currentDeps.add(id);
+      }
+      return store.states.get(id);
+    },
+    set value(newValue: T) {
+      const oldValue = store.states.get(id);
+      const eq =
+        ((store as any).stateEquals.get(id) as (a: T, b: T) => boolean) ||
+        Object.is;
+      if (eq(oldValue, newValue)) return;
+      store.states.set(id, newValue);
+      pendingUpdates.add(id);
+      scheduleBatch(store);
+    },
+  };
+
+  // Proxy for automatic unwrapping
+  return new Proxy(rune, {
+    get(target: StateRune<T>, prop: PropertyKey, receiver: any) {
+      if (prop === 'id' || prop === 'value' || prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      const value = target.value;
+      if (value && typeof value === 'object') {
+        return value[prop as keyof T];
+      }
+      // For primitives, allow valueOf/toString
+      if (prop === Symbol.toPrimitive) {
+        return (hint: string) => {
+          if (hint === 'number') return Number(value);
+          if (hint === 'string') return String(value);
+          return value;
+        };
+      }
+      return undefined;
+    },
+    set(target: StateRune<T>, prop: PropertyKey, value: any, receiver: any) {
+      if (prop === 'value') {
+        target.value = value;
+        return true;
+      }
+      const current = target.value;
+      if (current && typeof current === 'object') {
+        (current as any)[prop] = value;
+        // Trigger update
+        target.value = current;
+        return true;
+      }
+      return false;
+    },
+    has(target: StateRune<T>, prop: PropertyKey) {
+      if (prop === 'id' || prop === 'value' || prop in target) return true;
+      const value = target.value;
+      return value && typeof value === 'object' ? prop in value : false;
+    },
+    ownKeys(target: StateRune<T>) {
+      const value = target.value;
+      return value && typeof value === 'object' ? Reflect.ownKeys(value) : [];
+    },
+    getOwnPropertyDescriptor(target: StateRune<T>, prop: PropertyKey) {
+      if (prop === 'id' || prop === 'value' || prop in target) {
+        return Object.getOwnPropertyDescriptor(target, prop);
+      }
+      const value = target.value;
+      if (prop === Symbol.toPrimitive) {
+        return {
+          configurable: true,
+          enumerable: false,
+          value: (hint: string) => {
+            if (hint === 'number') return Number(value);
+            if (hint === 'string') return String(value);
+            return value;
+          },
+        };
+      }
+      return value && typeof value === 'object'
+        ? Object.getOwnPropertyDescriptor(value, prop)
+        : undefined;
+    },
+    getPrototypeOf(target: StateRune<T>) {
+      const value = target.value;
+      return value && typeof value === 'object'
+        ? Object.getPrototypeOf(value)
+        : Object.prototype;
+    },
+  }) as StateRune<T>;
+}
+
+// $derived rune implementation
+export function $derived<T>(fn: () => T): DerivedRune<T> {
+  const id = generateId();
+  const store = useGlobalStore.getState();
+  const deps = new Set<string>();
+
+  // Execute function to capture dependencies
+  currentDeps = deps;
+  const initialValue = fn();
+  currentDeps = null;
+
+  // Store the derived
+  store.deriveds.set(id, { fn, value: initialValue, deps });
+
+  const rune: DerivedRune<T> = {
+    id,
+    get value(): T {
+      if (currentDeps) {
+        currentDeps.add(id);
+      }
+      const derived = store.deriveds.get(id);
+      return derived ? derived.value : initialValue;
+    },
+  };
+
+  // Proxy for automatic unwrapping
+  return new Proxy(rune, {
+    get(target: DerivedRune<T>, prop: PropertyKey, receiver: any) {
+      if (prop === 'id' || prop === 'value' || prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      const value = target.value;
+      if (value && typeof value === 'object') {
+        return value[prop as keyof T];
+      }
+      if (prop === Symbol.toPrimitive) {
+        return (hint: string) => {
+          if (hint === 'number') return Number(value);
+          if (hint === 'string') return String(value);
+          return value;
+        };
+      }
+      return undefined;
+    },
+    has(target: DerivedRune<T>, prop: PropertyKey) {
+      if (prop === 'id' || prop === 'value' || prop in target) return true;
+      const value = target.value;
+      return value && typeof value === 'object' ? prop in value : false;
+    },
+    ownKeys(target: DerivedRune<T>) {
+      const value = target.value;
+      return value && typeof value === 'object' ? Reflect.ownKeys(value) : [];
+    },
+    getOwnPropertyDescriptor(target: DerivedRune<T>, prop: PropertyKey) {
+      if (prop === 'id' || prop === 'value' || prop in target) {
+        return Object.getOwnPropertyDescriptor(target, prop);
+      }
+      const value = target.value;
+      if (prop === Symbol.toPrimitive) {
+        return {
+          configurable: true,
+          enumerable: false,
+          value: (hint: string) => {
+            if (hint === 'number') return Number(value);
+            if (hint === 'string') return String(value);
+            return value;
+          },
+        };
+      }
+      return value && typeof value === 'object'
+        ? Object.getOwnPropertyDescriptor(value, prop)
+        : undefined;
+    },
+    getPrototypeOf(target: DerivedRune<T>) {
+      const value = target.value;
+      return value && typeof value === 'object'
+        ? Object.getPrototypeOf(value)
+        : Object.prototype;
+    },
+  }) as DerivedRune<T>;
+}
+
+export default { $state, $derived, $effect: effect, useRune, $ };

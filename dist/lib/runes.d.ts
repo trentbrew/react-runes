@@ -18,10 +18,12 @@ export declare function untrack<T>(fn: () => T): T;
  * @returns The current value of the rune, reactively updating the component
  */
 export declare const $: typeof useRune;
+export declare function $state<T>(initial: T, equals?: (a: T, b: T) => boolean): StateRune<T>;
+export declare function $derived<T>(fn: () => T): DerivedRune<T>;
 declare const _default: {
-    state: typeof state;
-    derived: typeof derived;
-    effect: typeof effect;
+    $state: typeof $state;
+    $derived: typeof $derived;
+    $effect: typeof effect;
     useRune: typeof useRune;
     $: typeof useRune;
 };
