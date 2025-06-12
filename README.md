@@ -32,9 +32,12 @@ npm install react-runes
 
 ### Runes System
 
-- `state(initial)`: Create a reactive state value.
-- `derived(fn)`: Create a computed value that updates when dependencies change.
+- `state(initial)`: Create a reactive state value. You must use `.value` to access/mutate.
+- `$state(initial)`: Creates a reactive proxy. No `.value` needed for objects.
+- `derived(fn)`: Create a computed value that updates when dependencies change. Must use `.value`.
+- `$derived(fn)`: Creates a reactive proxy for computed values. No `.value` needed.
 - `effect(fn)`: Run side effects when dependencies change.
+- `untrack(fn)`: Execute a function without tracking its dependencies.
 
 ### The `$` Hook
 
@@ -44,25 +47,45 @@ npm install react-runes
 
 #### Example
 
+Here's an example that shows how to use `$state` and `$derived` with a user object.
+
 ```tsx
-import { state, derived, effect, $ } from 'react-runes';
+import { $state, $derived, effect, $ } from 'react-runes';
 
-const count = state(0);
-const doubleCount = derived(() => count.value * 2);
-
-effect(() => {
-  console.log('Count changed:', count.value);
+// Create a reactive user object
+const user = $state({
+  firstName: 'John',
+  lastName: 'Doe',
 });
 
-export default function Counter() {
-  const countValue = $(count);
-  const doubleValue = $(doubleCount);
+// Create a derived value for the full name
+const fullName = $derived(() => `${user.firstName} ${user.lastName}`);
+
+effect(() => {
+  console.log('User changed:', user.firstName, user.lastName);
+});
+
+export default function UserProfile() {
+  const localUser = $(user);
+  const localFullName = $(fullName);
 
   return (
     <div>
-      <p>Count: {countValue}</p>
-      <p>Double: {doubleValue}</p>
-      <button onClick={() => (count.value += 1)}>Increment</button>
+      <p>First Name: {localUser.firstName}</p>
+      <p>Last Name: {localUser.lastName}</p>
+      <p>Full Name: {localFullName}</p>
+      <input
+        type="text"
+        value={localUser.firstName}
+        onChange={(e) => (user.firstName = e.target.value)}
+        className="border p-2 rounded"
+      />
+      <input
+        type="text"
+        value={localUser.lastName}
+        onChange={(e) => (user.lastName = e.target.value)}
+        className="border p-2 rounded"
+      />
     </div>
   );
 }
@@ -76,17 +99,14 @@ Each feature/component lives in its own directory, colocated with its store and 
 
 ```yaml
 components/
-counter-example/
-counter-example.tsx
-counter.ts
-todo-example/
-todo-example.tsx
-todos.ts
+user-profile/
+user-profile.tsx
+user.ts // user rune is defined here
 ```
 
 - **Import from local store:**
   ```ts
-  import { todos, addTodo } from './todos';
+  import { user, fullName } from './user';
   ```
 
 ---
