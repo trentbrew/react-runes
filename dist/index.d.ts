@@ -1,1 +1,1 @@
-export { state, derived, effect, useRune as $, untrack } from './lib/runes';
+export { state, derived, effect, useRune as $, untrack, $state, $derived, } from './lib/runes';
